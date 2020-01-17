@@ -1,20 +1,21 @@
-package src.main.scala.com.effects
+package com.effects.copy
 
-import cats.effect._
-import cats.implicits._
-import cats.effect.concurrent.Semaphore
 import java.io._
 
-object Main extends IOApp {
+import cats.effect._
+import cats.effect.concurrent.Semaphore
+import cats.implicits._
 
-  override def run(args: List[String]): IO[ExitCode] = for {
+object Main {//extends IOApp {
+
+  /*override def run(args: List[String]): IO[ExitCode] = for {
     _ <- if(args.length < 2) IO.raiseError(new IllegalArgumentException("needs files"))
     else IO.unit
     orig = new File(args(0))
     dest = new File(args(1))
     count <- copy[IO](orig,dest)
     _ <- IO(println(s"$count bytes"))
-  } yield ExitCode.Success
+  } yield ExitCode.Success*/
 
   // goal, copy one file contents to another
   // use the resouruce

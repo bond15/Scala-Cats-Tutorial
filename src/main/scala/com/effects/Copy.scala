@@ -2,6 +2,7 @@ package src.main.scala.com.effects
 
 import cats.effect._
 import cats.implicits._
+import cats.effect.concurrent.Semaphore
 import java.io._
 
 object Main extends IOApp {
@@ -14,15 +15,16 @@ object Main extends IOApp {
     count <- copy(orig,dest)
     _ <- IO(println(s"$count bytes"))
   } yield ExitCode.Success
-
-
-
+  
   // goal, copy one file contents to another
   // use the resouruce
-  def copy(origin: File, dest: File): IO[Long] =
-    inputOutputStream(origin,dest).use {
-      case (in,out) => transfer(in,out)
-    }
+  def copy(origin: File, dest: File)(implicit concurrent: Concurrent[IO]): IO[Long] =
+    for {
+      guard <- Semaphore[IO](1)
+      count <- inputOutputStream(origin, dest, guard).use {
+        case (in, out) => guard.withPermit(transfer(in, out))
+      }
+    } yield count
 
   // initialize a transfer buffer, call recursive copier (transmit), return total bytes copied
   def transfer(origin: InputStream, dest: OutputStream): IO[Long] =
@@ -41,24 +43,26 @@ object Main extends IOApp {
         IO.pure(acc)
     } yield count
 
-  def inputStream(f: File): Resource[IO, FileInputStream] =
+  def inputStream(f: File, guard: Semaphore[IO]): Resource[IO, FileInputStream] =
     Resource.make {
       IO(new FileInputStream(f)) // build
     } { inStream =>
-      IO(inStream.close()).handleErrorWith(_ => IO.unit) // release
+      guard.withPermit(
+      IO(inStream.close()).handleErrorWith(_ => IO.unit))// release
     }
 
-  def outputStream(f: File): Resource[IO,FileOutputStream] =
+  def outputStream(f: File, guard: Semaphore[IO]): Resource[IO,FileOutputStream] =
     Resource.make {
       IO(new FileOutputStream(f))
     } { outStream =>
-      IO(outStream.close()).handleErrorWith(_ => IO.unit)
+      guard.withPermit(
+      IO(outStream.close()).handleErrorWith(_ => IO.unit))
     }
 
   //combines input and output resources in one context
-  def inputOutputStream(in: File, out: File): Resource[IO, (InputStream,OutputStream)] =
+  def inputOutputStream(in: File, out: File, guard: Semaphore[IO]): Resource[IO, (InputStream,OutputStream)] =
     for {
-      inStream <- inputStream(in)
-      outStream <- outputStream(out)
+      inStream <- inputStream(in,guard)
+      outStream <- outputStream(out,guard)
     } yield (inStream,outStream)
 }
